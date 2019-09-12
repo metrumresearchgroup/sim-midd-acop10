@@ -3,10 +3,10 @@
 
 
 - Day 1: October 24
-  - Session 1: Quantitative decision making in MIDD - Marc
-  - Session 2: Introduction to mrgsolve - Kyle
+  - Session A: Quantitative decision making in MIDD - Marc
+  - Session B: Introduction to mrgsolve - Kyle
 - Day 2: October 25
-  - Session 1: Fundamental simulation concepts - Mike
-  - Session 2: Case studies
+  - Session A: Fundamental simulation concepts - Mike
+  - Session B: Case studies
 
 
