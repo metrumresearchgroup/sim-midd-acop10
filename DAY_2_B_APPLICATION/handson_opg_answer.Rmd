@@ -1,0 +1,267 @@
+---
+title: "Fc-OPG PK/PD in healthy post-menopausal women"
+author: "Metrum Research Group"
+---
+
+# Packages
+```{r,message=FALSE}
+library(mrgsolve)
+library(tidyverse)
+library(magrittr)
+library(future.apply)
+theme_set(theme_bw())
+```
+
+## Question
+- What is the median change from baseline 14 days after 3 mg/kg SC dose?
+- What is the probability that median CFB is greater than 40%?
+
+# OPG model
+```{r}
+mod <- mread("opg.mod")
+
+mod
+```
+
+Checkout the random effects structure
+```{r}
+revar(mod)
+```
+
+
+```{r}
+mod <- mrgsolve:::collapse_omega(mod) 
+mod <- mrgsolve:::collapse_sigma(mod)
+```
+
+# Load the simulated posterior
+```{r}
+post <- read_csv("data/post.csv") %>% sample_n(n())
+
+post %>% head
+
+param(mod)
+```
+
+
+For most of our examples, we are taking output directly
+from a NONMEM run. This example is a little different:
+We have changed the column names from `THETA1`, `THETA2` 
+etc ... to `TVCL`, `TVVC` etc ...
+```{r,eval=FALSE}
+head(post)
+
+inventory(mod,post)
+```
+
+
+
+When working with results out of NONMEM, it is common to get
+the `THETA` , `OMEGA` and `SIGMA` estimates all in a single 
+row in a data frame.  
+
+In order to get the information for `OMEGA` and `SIGMA` in to 
+the problem, we need to go into this data and 
+form matrices.
+
+There are two specialized functions to help with this:
+
+- `as_bmat` when the data is in block format
+- `as_dmat` when the data is in diagonal format
+
+```{r}
+omegas <- as_bmat(post,"OMEGA")
+sigmas <- as_bmat(post,"SIGMA")
+
+omegas[[10]]
+
+length(omegas)
+is.list(omegas)
+
+slice(post, 10)
+
+omegas[[10]]
+sigmas[[10]]
+```
+
+
+Here is a simple dosing data set to simulate 100 patients with 
+3 mg/kg Fc-OPG SC x1
+```{r}
+sc3 <- ev(amt = 3*70) %>% ev_rep(seq(100))
+
+head(sc3)
+```
+
+
+We will get the observation design for the simulation 
+through a `tgrid` object
+```{r}
+stime(tgrid(0, 12, 6) + 24)
+
+des <- tgrid(end=-1,add=c(0,24*14))
+
+des
+```
+
+
+When we do replicate simulation, it almost always pays off
+to construct a function that will carry out one
+replicate.
+
+
+Arguments to the function are
+
+- `i` the current simulation replicate
+- `data` the dosing data set
+- `des` the observation design
+
+
+```{r}
+sim <- function(i,data,des) {
+  
+  mod <- 
+    mod %>%
+    param(slice(post,i)) %>%
+    omat(omegas[[i]]) %>% 
+    smat(sigmas[[i]])
+  
+  mod %>%
+    Req(PDDV) %>%
+    obsonly() %>%
+    mrgsim_df(data, tgrid=des) %>% 
+    mutate(irep=i) %>% 
+    mutate(TVIC50=mod$THETA13, TVQ1=mod$THETA5, TVVMAX=mod$THETA8)
+}
+```
+
+
+Also note 
+
+- We update `param` with `ith` row from `post`
+- We update `OMEGA` and `SIGMA` from the `ith` position 
+  in the appropriate list of matrices
+- We will capture the current 
+
+
+It is easy to test the function.  The 10th replicate will
+look like this
+```{r}
+sim(10,sc3,des)
+
+slice(post, 10)
+```
+
+
+
+Simulate reps
+```{r}
+Sys.setenv(R_FUTURE_FORK_ENABLE = TRUE)
+
+plan(multiprocess, workers = 8)
+
+set.seed(22223)
+
+out <- future_lapply(1:1000, sim, data=sc3, des=des) %>% bind_rows()
+
+head(out)
+```
+
+
+
+Summarise
+
+- First, get the baseline `NTX`
+- Then calculate percent CFB
+
+
+```{r}
+sum <- 
+  out %>%
+  group_by(ID,irep) %>%
+  mutate(BASE = first(PDDV), dDV = 100*(PDDV-BASE)/BASE) %>%
+  ungroup()
+
+head(sum)
+```
+
+
+
+Filter down to week 2
+```{r}
+sum <- sum %>% filter(time==336 & BASE >= 0)
+```
+
+
+Now, get the median
+```{r}
+summ <- 
+  sum %>%
+  filter(time==336) %>%
+  group_by(irep) %>%
+  summarise(med = median(dDV))
+
+ggplot(summ, aes( x = med)) + geom_histogram( col = "grey")
+
+summ
+```
+
+
+## From the abstract
+
+> Subsequent clinical trial simulations demonstrated that a single 3.0-mg/kg SC dose of Fc-OPG would be expected to produce, at 14 days post-dose, a median NTX percentage change from baseline of −45% (with a 95% prediction interval ranging from −34% to −60%)."
+
+```{r}
+ans <- signif(quantile(summ$med, c(0.5,0.025,0.975)),3)
+
+paste0(ans[1], " (", ans[3],",",ans[2],")")
+```
+
+Median week-2 change from baseline with 95% interval
+
+
+Probability that median cfb > 40%
+```{r}
+mean(summ$med < -40)
+```
+
+Plot the distribution of the week-2 change from baseline
+```{r}
+ggplot(summ, aes(x=med)) + geom_histogram(col="grey")
+```
+
+
+<hr><div class = spacer></div>
+
+# Sensitivity analysis
+
+We are already set up to do the sensitivity analysis
+
+```{r}
+par <- dplyr::distinct(out,irep,TVIC50,TVQ1,TVVMAX)
+head(par)
+sens <- left_join(summ,par)
+head(sens)
+```
+
+`TVIC50`
+```{r}
+ggplot(sens, aes(TVIC50, med)) + 
+  geom_point() + 
+  geom_smooth(method="loess",lwd=2)
+```
+
+`TVVMAX`
+```{r}
+ggplot(sens, aes(TVVMAX, med)) + 
+  geom_point() +
+  geom_smooth(method="loess",lwd=2)
+```
+
+
+`TVQ`
+```{r}
+ggplot(sens, aes(TVQ1, med)) + 
+  geom_point() +
+  geom_smooth(method="loess",lwd=2)
+```
