@@ -4,6 +4,7 @@ author: "Metrum Research Group"
 ---
 
 # Packages
+
 ```{r,message=FALSE}
 library(mrgsolve)
 library(tidyverse)
@@ -88,7 +89,7 @@ sigmas[[10]]
 Here is a simple dosing data set to simulate 100 patients with 
 3 mg/kg Fc-OPG SC x1
 ```{r}
-sc3 <- ev(amt = 3*70) %>% ev_rep(seq(100))
+sc3 <- expand.ev(ID = seq(100), amt = 3*70)
 
 head(sc3)
 ```
@@ -147,7 +148,7 @@ Also note
 It is easy to test the function.  The 10th replicate will
 look like this
 ```{r}
-sim(10,sc3,des)
+sim(10,sc3,des) %>% head
 
 slice(post, 10)
 ```
@@ -160,9 +161,7 @@ Sys.setenv(R_FUTURE_FORK_ENABLE = TRUE)
 
 plan(multiprocess, workers = 8)
 
-set.seed(22223)
-
-out <- future_lapply(1:1000, sim, data=sc3, des=des) %>% bind_rows()
+out <- future_lapply(1:1000, sim, data=sc3, des=des, future.seed=3) %>% bind_rows()
 
 head(out)
 ```

@@ -1,0 +1,193 @@
+---
+title: "Introduction to mrgsolve"
+author: "Simulation Concepts Workshop<br>Metrum Research Group"
+date: "ACoP10 2019"
+---
+
+
+<hr>
+
+```{r setup, include=FALSE}
+source("../common/global.R")
+library(tidyverse)
+theme_set(theme_bw())
+library(mrgsolve)
+```
+
+# Read in a model 
+
+- Meropenem population PK
+  - IV administration, short or long infusion
+  - 2-compartment PK
+
+First, load `meropenem_basic`, which is a PK model for meropenem, written 
+in terms of basic PK parameters (e.g. `CL`, `V`, etc)
+
+```{r}
+mod <- mread("meropen_basic")
+```
+
+
+```{r}
+param(mod)
+```
+
+
+# Explore dosing regimens with event object
+
+We can use a simple event object to implement a single dose
+
+
+```{r}
+short <- ev(amt = 500, tinf = 0.5)
+
+short
+```
+
+The event object has data items like
+1. `amt` : dose amount
+1. `rate` : infusion rate
+1. `cmt` : compartment number
+1. `evid` : event id
+
+There are other items as well. 
+
+
+We can simulate from this event object with the `meropen_basic` model
+```{r}
+out <- mod %>% ev(short) %>% mrgsim(end = 8)
+
+out
+```
+
+And work with the result
+```{r}
+plot(out)
+```
+
+
+## Multiple dosing
+```{r}
+short3 <- ev(amt = 500, ii = 8, addl = 2)
+
+mod %>% ev(short3) %>% mrgsim(end = 24, Req = "CP") %>% plot()
+```
+
+## How to implement multiple doses
+
+In addition to event objects, we can simulate a batch or population of 
+individuals with a data set.  For example
+
+
+```{r}
+data <- expand.ev(amt = 500, tinf = c(0.5, 1, 3))
+
+data
+```
+
+In this example, we have 3 IDs, each receiving 500 mg x1 and infusion durations
+ranging from 0.5 to 3 hours.
+
+
+Now to simulate the `meropen_basic` model with the data set
+```{r}
+mod %>% data_set(data) %>% mrgsim() %>% plot(CP~time)
+```
+
+A lot of the complexity and efficiency in your simulation comes from the 
+data set.
+
+
+# Population model
+
+We can read in `meropen_pop`, which is a population version of the same
+model
+
+```{r}
+mod <- mread_cache("meropen_pop")
+
+```
+
+Now, we have some population elements going
+
+```{r}
+param(mod)
+```
+
+
+```{r}
+revar(mod)
+```
+
+Now, when we take a population template
+
+```{r}
+data <- ev_rep(ev(amt = 500, tinf = 2), 1:50)
+
+head(data)
+
+```
+
+we'll get population output
+
+```{r}
+mod %>% mrgsim_d(data) %>% plot(CP~time, logy=TRUE)
+```
+
+
+
+# Posterior simulation
+
+```{r}
+post <- read_csv("post.csv")
+
+head(post)
+```
+
+```{r, message=TRUE}
+inventory(mod,post)
+```
+
+
+```{r}
+omega <- as_bmat(post, "OMEGA")
+```
+
+
+# Parallelizing your code
+
+Use the future.apply package
+```{r}
+mod <- mread_cache("meropen_pop")
+
+library(future.apply)
+
+options(future.fork.enable=TRUE)
+
+plan(multiprocess, workers = 4)
+
+sim <- function(i,d) {
+  mod <- param(mod,slice(d$post,i))
+  mod <- omat(mod,d$omega[[i]])
+  mrgsim_df(mod,d$data, carry_out = "tinf") %>% 
+    mutate(irep = i)
+}
+
+set.seed(123)
+
+reps <- seq(40)
+
+data <- expand.ev(amt = 500, tinf = c(0.5,1,3)) %>% mutate(tinf = amt/rate)
+
+dat <- list(data = data, mod = mod, post = post, omega = omega)
+
+out <- future_lapply(reps, sim, dat) %>% bind_rows()
+```
+
+
+```{r}
+ggplot(out, aes(time,CP,group=irep)) + facet_wrap(~tinf) + geom_line() + 
+  scale_y_log10(limits = c(0.1, NA))
+```
+
+

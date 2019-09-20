@@ -1,0 +1,6 @@
+html_document: 
+  css: ../common/styles.css
+  toc: true
+  number_sections: true
+  toc_float: true
+  highlight: pygments

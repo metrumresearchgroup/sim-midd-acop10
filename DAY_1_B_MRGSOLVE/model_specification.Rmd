@@ -1,0 +1,198 @@
+---
+title: "Model Specification"
+author: "Simulation Concepts Workshop<br>Metrum Research Group"
+date: "ACoP10 2019"
+---
+
+
+<hr>
+
+```{r setup, include=FALSE}
+source("../common/global.R")
+library(tidyverse)
+theme_set(theme_bw())
+library(mrgsolve)
+```
+
+
+
+# Simple model
+
+
+![](figure/simplepk.png)
+
+
+# Elements
+
+1. Parameters
+1. Compartments
+1. Derived parameters
+1. Differential equations
+1. Derived outputs
+1. Random effects
+
+
+
+# Parameters
+
+```{c, eval=FALSE}
+[ param ] 
+CL = 1, V = 20
+KA = 1.1
+```
+
+```{c, eval=FALSE}
+[ param ] 
+WT = 198/2.2, FLAG = 1, STUDY = 101
+```
+
+
+## Parameters - THETA
+
+```{c, eval = FALSE}
+[ theta ] 
+1, 20, 1.1
+```
+
+Implies parameters with
+- `THETA1` = 1
+- `THETA2` = 20
+- `THETA3` = 1.1
+
+Note that `THETA` means nothing to mrgsolve, but setting up parameters called
+`THETA1`, `THETA2` can create important connections to NONMEM output.
+
+
+# Compartments
+
+Defaults to zero mass to start
+
+```{c, eval=FALSE}
+[ cmt ]  DEPOT CENTRAL PERIP
+```
+
+Specify a fixed initial state
+
+```{c, eval=FALSE}
+[ cmt ]  CMT_X = 10
+```
+
+# ODE
+
+```{c, eval=FALSE}
+[ ode ] 
+
+dxdt_DEPOT = -KA*DEPOT;
+
+dxdt_CENT  = KA*DEPOT - K10*CENT;
+```
+
+# Derived parameters
+
+```{c, eval=FALSE}
+[ main ] 
+
+double CL = TVCL * exp(ETA(1));
+
+```
+
+
+# Derived outputs
+
+Either use the `[ capture ]` block, naming the thing that you want to see 
+in the output
+
+```{c, eval=FALSE}
+
+[ table ] 
+
+double CP = CENT/V2;
+
+[ capture ] CP
+
+```
+
+Or derive a variable with the `capture` type
+
+```{c, eval=FALSE}
+
+[ table ] 
+
+capture CP = CENT/V2;
+
+```
+
+# Random effects
+
+Using omega as an example (sigma has the same form)
+
+Diagonal
+```{c, eval=FALSE}
+[ omega ] 
+0.04, 0.9, 0.1
+```
+
+Block
+```{c, eval=FALSE}
+[ omega ] @block
+0.4
+0.01 0.9
+```
+
+# Import NONMEM results
+
+If you have a run numbered `101` in `../model/pk`
+
+```{c, eval=FALSE}
+[ nmxml ] 
+run = 101
+project = "../model/pk"
+```
+
+This will import all of the `THETA`, `OMEGA`, and `SIGMA`
+
+# 1- and 2-compartment PK models
+
+Prefer these models when possible for speed advantage and ease of coding.
+
+__Below__: 1-compartment, first order absorption, showing required "parameters"
+
+```{c, eval=FALSE}
+[ pkmodel ] 
+cmt = "DEPOT CENT", depot = TRUE
+
+[ param ] CL = 1, V = 20, KA = 1.1
+```
+
+__Above__: `CL`, `V` and `KA` given as parameters
+
+__Below__: `CL` and `V` derived in `main` and `KA` given as a parameter
+```{c, eval=FALSE}
+[ pkmodel ] 
+cmt = "DEPOT CENT", depot = TRUE
+
+[ param ] TVCL = 1, TVV = 20, KA = 1.1
+
+[ main ] 
+double CL = TVCL * exp(ETA(1)); 
+double V  = TVV  * exp(ETA(2));
+```
+
+For two compartment model, first order, the volumes are `V2` and `V3`
+
+```{c, eval=FALSE}
+[ pkmodel ] 
+cmt = "DEPOT CENT PERIPH", depot = TRUE
+
+[ param ] CL = 1, V2 = 20, Q = 8, V3 = 100, KA = 1.1
+```
+
+For two compartment model, no depot, the volume numbers get shifted down
+to `V1` and `V2`
+
+```{c, eval=FALSE}
+[ pkmodel ] 
+cmt = "CENT PERIPH"
+
+[ param ] CL = 1, V1 = 20, Q = 8, V2 = 100
+```
