@@ -1,7 +1,11 @@
 # Packages
 library(mrgsolve)
 library(tidyverse)
-library(parallel)
+library(furrr)
+
+options(future.fork.enable=TRUE)
+plan(multiprocess,workers=4L)
+opt <- future_options(seed = TRUE)
 
 # Exercise 3:  Uncertainty Simulation
 
@@ -33,7 +37,8 @@ sc <- expand.ev(ID=1, amt=0, cmt=1, dose=5, ii=336, addl=5)
 
 #We will get the observation design for the simulation through a `tgrid` object
 #Interested in 2 weeks following final dose, 2016 hours
-des <- tgrid(end=-1,add=seq(0,2016,1))
+des <- tgrid(end  = 2016)
+
 des
 
 # Replicate simulation with uncertainty
@@ -51,33 +56,38 @@ sim <- function(i,data,des) {
   #set parameter value
   mod <- mod %>% param(slice(post,i)) 
   #simulate and add replicate number to data frame
-  mod %>% carry_out(evid) %>% mrgsim(data=data,tgrid=des,obsonly=TRUE) %>% mutate(irep=i) %>% filter(evid==0) 
+  mod %>% 
+    mrgsim(data=data,tgrid=des,obsonly=TRUE) %>% 
+    mutate(irep=i) 
 }
 
 #simulate by calling the function 1000 times
-options(mc.cores=4)
-mcRNG()
 set.seed(9999)
-out <- mclapply(1:1000, sim, data=sc, des=des) %>% bind_rows
+out <- future_map_dfr(1:1000, sim, data=sc, des=des, .options=opt)
 
 head(out)
 
 #summarize and plot
-summ <- out %>% group_by(time) %>% summarize(Q05=quantile(PCFB,prob=c(0.05)),
-                                             Q50=quantile(PCFB,prob=c(0.50)),
-                                             Q95=quantile(PCFB,prob=c(0.95)))
+summ <- 
+  out %>% 
+  group_by(time) %>% 
+  summarize(
+    Q05=quantile(PCFB,prob=c(0.05)),
+    Q50=quantile(PCFB,prob=c(0.50)),
+    Q95=quantile(PCFB,prob=c(0.95))
+  )
 
 #Plot the distribution of percent change from baseline
-ggplot(data=summ) + geom_ribbon(aes(x=time,ymin=Q05,ymax=Q95),fill='cyan',alpha=0.5) + geom_line(aes(x=time,y=Q50)) + 
-                    geom_hline(yintercept=-40,linetype="dashed") + ylab("Change in NTX (%)")
+ggplot(data=summ) + 
+  geom_ribbon(aes(x=time,ymin=Q05,ymax=Q95),fill='cyan',alpha=0.5) + 
+  geom_line(aes(x=time,y=Q50)) + 
+  geom_hline(yintercept=-40,linetype="dashed") +
+  ylab("Change in NTX (%)")
 
-ggplot(data=(out %>% filter(time==2016))) + geom_histogram(aes(x=PCFB),fill='cyan',bins=50) + 
+ggplot(data=(out %>% filter(time==2016))) + 
+  geom_histogram(aes(x=PCFB),fill='cyan',bins=50) + 
   geom_vline(xintercept=-40,linetype='dashed') +
   xlab("Change in NTX at 3 Months (%)")
 
 #calculate the fraction below the -40% threshold
-fraction_below <- function(x,boundary) { length(x[x<boundary])/length(x) }
-out %>% filter(time==2016) %>% summarize(FRAC=fraction_below(PCFB,-40))
-
-
-
+out %>% filter(time==2016) %>% summarize(FRAC=mean(PCFB < -40))

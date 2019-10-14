@@ -1,7 +1,11 @@
 # Packages
 library(mrgsolve)
 library(tidyverse)
-library(parallel)
+library(furrr)
+
+options(future.fork.enable=TRUE)
+plan(multiprocess,workers=4L)
+opt <- future_options(seed = TRUE)
 
 # Exercise 5:  Population Simulation
 
@@ -53,33 +57,34 @@ des
 sim.mean <- function(i,data,des) {
   #grab 600 patients demographics and merge into data
   dem600 <- demo %>% sample_n(600) %>% mutate(ID=row_number())
-  data <- data %>% left_join(dem600)
+  data <- data %>% left_join(dem600,by="ID")
   #set parameter values
   mod <- mod %>% param(slice(post,i)) %>% omat(omegas[[i]]) 
   #simulate one study arm
-  res <- mod %>% Req(FRAC) %>% mrgsim(data=data,tgrid=des,obsonly=TRUE,recsort=3)
+  res <- 
+    mod %>% 
+    Req(FRAC) %>% 
+    mrgsim(data=data,tgrid=des,obsonly=TRUE,recsort=3,ss_n=100, ss_fixed=TRUE)
+  
   #calculate mean and add replicated number to data frame
-  out <- res %>% filter(time==336) %>% summarize(FRAC=mean(FRAC)) %>% mutate(irep=i) %>% as.data.frame()
+  out <- res %>% filter(time==336) %>% summarize(FRAC=mean(FRAC),irep=i)
   return(out)
 }
 
 #simulate by calling the function 1000 times
-options(mc.cores=4)
-mcRNG()
 set.seed(9999)
-out <- mclapply(1:1000, sim.mean, data=sc, des=des) %>% bind_rows
+out <- future_map_dfr(1:1000, sim.mean, data=sc, des=des, .options=opt)
 head(out)
 
 #simulate placebo fracture rate
 sc <- sc %>% mutate(amt=0)
-placebo <- mclapply(1:1000, sim.mean, data=sc, des=des) %>% bind_rows
+placebo <- future_map_dfr(1:1000, sim.mean, data=sc, des=des, .options=opt)
 head(placebo)
 
 #merge results and calculate fracture rate vs placebo for each study
-res <- out %>% mutate(PLACEBO=placebo$FRAC) %>% mutate(DIFF=FRAC-PLACEBO)
+res <- out %>% mutate(PLACEBO=placebo$FRAC,DIFF=FRAC-PLACEBO)
 head(res)
 
 #calculate fraction of studies with fracture rate at least 4.6% better than placebo
-fraction_below <- function(x,boundary) { length(x[x<=boundary])/length(x) }
-res %>% summarize(FRAC=fraction_below(DIFF,-0.046))
+res %>% summarize(FRAC=mean(DIFF < -0.046))
 

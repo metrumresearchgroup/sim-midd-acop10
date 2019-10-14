@@ -75,4 +75,4 @@ double PKDV = exp(log(IPRED)+PKEPS);
 [ capture ] @annotated
 IPRED : Individual-predicted concenrtation (ng/mL)
 PKDV  : Fc-OPG serum concentration (ng/mL)
-AUC   : Accumulated concentration (ng*hour/mL)
+//AUC   : Accumulated concentration (ng*hour/mL)

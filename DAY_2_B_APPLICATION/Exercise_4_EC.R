@@ -1,13 +1,18 @@
 # Packages
 library(mrgsolve)
 library(tidyverse)
-library(parallel)
+library(furrr)
+
+options(future.fork.enable=TRUE)
+plan(multiprocess,workers=4L)
+opt <- future_options(seed = TRUE)
 
 # Exercise 4:  Probabilistic Simulation
 
 # Question
-# If two doses are taken into Phase 3,  one for patients < 70 kg and one for patients >= 70 kg, 
-# what doses are required for patients to have a 90% probability of achieving the target?
+# If two doses are taken into Phase 3,  one for patients < 70 kg and one for 
+# patients >= 70 kg, what doses are required for patients to have a 90% 
+# probability of achieving the target?
 
 #Read model
 mod <- mread("models/opg_pkpd.mod")
@@ -39,7 +44,7 @@ sc <- sc %>% mutate(dose=amt)
 sc
 
 #We will get the observation design for the simulation through a `tgrid` object
-des <- tgrid(end=-1,add=seq(0,336,6))
+des <- tgrid(0,336,6)
 des
 
 # Replicate simulation with uncertainty
@@ -57,30 +62,43 @@ sim <- function(i,data,des) {
   #set parameter value
   mod <- mod %>% param(slice(post,i)) %>% omat(omegas[[i]])
   #simulate and add replicate number to data frame
-  mod %>% carry_out(dose) %>% mrgsim(data=data,tgrid=des,obsonly=TRUE,recsort=3) %>% mutate(irep=i) 
+  mod %>% 
+    carry_out(dose) %>% 
+    mrgsim(data=data,tgrid=des,obsonly=TRUE,recsort=3,
+           ss_n = 50, ss_fixed=TRUE) %>% 
+    mutate(irep=i) 
 }
 
 #simulate by calling the function 1000 times
-options(mc.cores=4)
-mcRNG()
 set.seed(1234)
-out <- mclapply(1:1000, sim, data=sc, des=des) %>% bind_rows
+out <- future_map_dfr(1:1000, sim, data=sc, des=des,.options=opt)
 head(out)
 
 #summarize and plot
-summ <- out %>% group_by(dose,time) %>% summarize(Q20=quantile(PCFB,prob=c(0.20)),
-                                                  Q50=quantile(PCFB,prob=c(0.50)),
-                                                  Q80=quantile(PCFB,prob=c(0.80)))
-ggplot(data=summ) + geom_ribbon(aes(x=time,ymin=Q20,ymax=Q80),fill='cyan',alpha=0.5) + geom_line(aes(x=time,y=Q50)) +
-                    geom_hline(yintercept=-40,linetype="dashed") + xlab("Time (hours)") + 
-                    ylab("Change in NTX (%)") + facet_wrap(~dose)
+summ <- 
+  out %>% 
+  group_by(dose,time) %>% 
+  summarize(
+    Q20=quantile(PCFB,prob=c(0.20)),
+    Q50=quantile(PCFB,prob=c(0.50)),
+    Q80=quantile(PCFB,prob=c(0.80))
+  )
 
-fraction_below <- function(x,boundary) { length(x[x<boundary])/length(x) }
-below <- out %>% filter(time==336) %>% group_by(dose) %>% summarize(FRAC=fraction_below(PCFB,-40))
+ggplot(data=summ) + 
+  geom_ribbon(aes(x=time,ymin=Q20,ymax=Q80),fill='cyan',alpha=0.5) + 
+  geom_line(aes(x=time,y=Q50)) +
+  geom_hline(yintercept=-40,linetype="dashed") +
+  xlab("Time (hours)") + ylab("Change in NTX (%)") + 
+  facet_wrap(~dose)
+
+below <- out %>% filter(time==336) %>% group_by(dose) %>% summarize(FRAC=mean(PCFB < -40))
 below
 
-ggplot(data=below) + geom_line(aes(x=dose,y=FRAC),color='red',size=1.5) + geom_hline(yintercept=0.8,linetype='dashed') +
-                     xlab("Dose (mg)") + ylab("Probability dNTX < -40%") + ggtitle("Patients < 70 kg")
+ggplot(data=below) + 
+  geom_line(aes(x=dose,y=FRAC),color='red',size=1.5) + 
+  geom_hline(yintercept=0.8,linetype='dashed') +
+  xlab("Dose (mg)") + ylab("Probability dNTX < -40%") + 
+  ggtitle("Patients < 70 kg")
 
 
 
@@ -93,17 +111,28 @@ out <- mclapply(1:1000, sim, data=sc, des=des) %>% bind_rows
 head(out)
 
 #summarize and plot
-summ <- out %>% group_by(dose,time) %>% summarize(Q20=quantile(PCFB,prob=c(0.20)),
-                                                  Q50=quantile(PCFB,prob=c(0.50)),
-                                                  Q80=quantile(PCFB,prob=c(0.80)))
-ggplot(data=summ) + geom_ribbon(aes(x=time,ymin=Q20,ymax=Q80),fill='cyan',alpha=0.5) + geom_line(aes(x=time,y=Q50)) +
-  geom_hline(yintercept=-40,linetype="dashed") + xlab("Time (hours)") + 
-  ylab("Change in NTX (%)") + facet_wrap(~dose)
+summ <- 
+  out %>% 
+  group_by(dose,time) %>% 
+  summarize(
+    Q20=quantile(PCFB,prob=c(0.20)),
+    Q50=quantile(PCFB,prob=c(0.50)),
+    Q80=quantile(PCFB,prob=c(0.80))
+  )
+
+ggplot(data=summ) + 
+  geom_ribbon(aes(x=time,ymin=Q20,ymax=Q80),fill='cyan',alpha=0.5) + 
+  geom_line(aes(x=time,y=Q50)) +
+  geom_hline(yintercept=-40,linetype="dashed") + 
+  xlab("Time (hours)") + ylab("Change in NTX (%)") + 
+  facet_wrap(~dose)
 
 #calculate the fraction of patients below the threshold
-fraction_below <- function(x,boundary) { length(x[x<boundary])/length(x) }
-below <- out %>% filter(time==336) %>% group_by(dose) %>% summarize(FRAC=fraction_below(PCFB,-40))
+below <- out %>% filter(time==336) %>% group_by(dose) %>% summarize(FRAC=mean(PCFB < -40))
 below
 
-ggplot(data=below) + geom_line(aes(x=dose,y=FRAC),color='red',size=1.5) + geom_hline(yintercept=0.8,linetype='dashed') +
-                     xlab("Dose (mg)") + ylab("Probability dNTX < -40%") + ggtitle("Patients >= 70 kg")
+ggplot(data=below) + 
+  geom_line(aes(x=dose,y=FRAC),color='red',size=1.5) + 
+  geom_hline(yintercept=0.8,linetype='dashed') +
+  xlab("Dose (mg)") + ylab("Probability dNTX < -40%") + 
+  ggtitle("Patients >= 70 kg")
