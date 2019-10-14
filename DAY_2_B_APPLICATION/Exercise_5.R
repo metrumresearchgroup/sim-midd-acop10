@@ -10,7 +10,7 @@ opt <- future_options(seed = TRUE)
 # Exercise 5:  Population Simulation
 
 # Question
-# What is the probability that at least a 43% mean reduction in NTX  would be 
+# What is the probability that at least a 53% mean reduction in NTX  would be 
 # observed at steady-state in the OPG-treated study arm?
 # 600 patients receiving 400 mg Q2W
 
