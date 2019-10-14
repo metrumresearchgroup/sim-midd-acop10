@@ -45,7 +45,7 @@ results
 #plot maximum Cmax by dose
 
 qplot(DOSE,MAX,data = results, geom = c("line", "point"), colour=I("red3")) + 
-  ylab("Maximcum Concenration (ng/mL)") + 
+  ylab("Maximum Concenration (ng/mL)") + 
   xlab("Dose (mg/kg)") +
   geom_hline(yintercept=5000,linetype='dashed')
 
