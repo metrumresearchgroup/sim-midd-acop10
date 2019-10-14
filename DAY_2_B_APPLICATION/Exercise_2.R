@@ -61,12 +61,12 @@ ggplot(data=summ) +
 
 #summarize and plot
 #calculate what fraction of trough concentrations are above 90 ng/mL at 672 hours
-fraction_below <- function(x,boundary) { length(x[x<boundary])/length(x) }
+fraction_above <- function(x,boundary) { length(x[x>boundary])/length(x) }
 above <- 
   out %>% 
   filter(time==672) %>% 
   group_by(DOSE) %>% 
-  summarize(FRAC=fraction_below(PKDV,90))
+  summarize(FRAC=fraction_above(PKDV,90))
 
 above
 
