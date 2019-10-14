@@ -1,12 +1,17 @@
 # Packages
 library(mrgsolve)
 library(tidyverse)
-library(parallel)
+library(furrr)
+
+options(future.fork.enable=TRUE)
+plan(multiprocess,workers=4L)
+opt <- future_options(seed = TRUE)
 
 # Exercise 5:  Population Simulation
 
 # Question
-# What is the probability that at least a 43% mean reduction in NTX  would be observed at steady-state in the OPG-treated study arm?
+# What is the probability that at least a 43% mean reduction in NTX  would be 
+# observed at steady-state in the OPG-treated study arm?
 # 600 patients receiving 400 mg Q2W
 
 mod <- mread("models/opg_pkpd.mod")
@@ -25,6 +30,7 @@ post <- read.table("data/post.csv",header=T,sep=",") %>% sample_n(1000)
 
 omegas <- as_bmat(post,"OMEGA")
 omegas[[1]]
+
 sigmas <- as_bmat(post,"SIGMA")
 sigmas[[1]]
 
@@ -53,34 +59,44 @@ sim.mean <- function(i,data,des) {
   #set parameter values
   mod <- mod %>% param(slice(post,i)) %>% omat(omegas[[i]]) %>% smat(sigmas[[i]])
   #simulate one study arm
-  res <- mod %>% Req(PCFB) %>% mrgsim(data=data,tgrid=des,obsonly=TRUE,recsort=3)
+  res <- 
+    mod %>% 
+    Req(PCFB) %>% 
+    mrgsim(data=data,tgrid=des,obsonly=TRUE,recsort=3, 
+           ss_n = 100, ss_fixed = TRUE)
   #calculate mean and add replicated number to data frame
-  out <- res %>% filter(time==336) %>% summarize(MEAN=mean(PCFB)) %>% mutate(irep=i) %>% as.data.frame()
+  out <- 
+    res %>% 
+    filter(time==336) %>% 
+    summarize(MEAN=mean(PCFB)) %>% 
+    mutate(irep=i)
+  
   return(out)
 }
 
 #simulate by calling the function 1000 times
-options(mc.cores=4)
-mcRNG()
 set.seed(9999)
-out <- mclapply(1:1000, sim.mean, data=sc, des=des) %>% bind_rows
+
+out <- future_map_dfr(1:1000, sim.mean, data=sc, des=des,.options=opt)
+
 head(out)
 
-ggplot(data=out) + geom_histogram(aes(x=MEAN),fill='cyan',bins=50) + 
-                   geom_vline(xintercept=-53,linetype='dashed') +
-                   xlab("Mean Change in NTX at Trough (%)")
+ggplot(data=out) + 
+  geom_histogram(aes(x=MEAN),fill='cyan',bins=50) + 
+  geom_vline(xintercept=-53,linetype='dashed') +
+  xlab("Mean Change in NTX at Trough (%)")
 
 #calculate fraction of studies below threshold
-fraction_below <- function(x,boundary) { length(x[x<=boundary])/length(x) }
-out %>% summarize(FRAC=fraction_below(MEAN,-53))
-
-
+out %>% summarize(FRAC=mean(MEAN < -53))
 
 ######## Sensitivity Analysis ############
 
-# pull THETA values out of posteriors and merge with mean change in NTX by replicate number
-data <- post %>% dplyr::select(THETA1,THETA2,THETA3,THETA4,THETA5,THETA6,THETA7,THETA8,THETA9,THETA10,THETA11,THETA12,THETA13) %>% 
-                 mutate(irep=row_number()) %>% left_join(out)
+# pull THETA values out of posteriors and merge with mean change in NTX by 
+# replicate number
+data <- post %>% 
+  dplyr::select(contains("THETA")) %>%
+  mutate(irep=row_number()) %>% 
+  left_join(out)
 
 # plot posteriors vs mean change in NTX
 ggplot(data=data,aes(x=THETA1,y=MEAN)) + geom_point() + geom_smooth() + xlab("Clearance") + ylab("Mean Change in NTX (%)")

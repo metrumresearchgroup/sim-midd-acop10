@@ -4,7 +4,7 @@ PT, Peterson MC. Population PK-PD model for Fc-osteoprotegerin in healthy
 postmenopausal women. J Pharmacokinet Pharmacodyn. 2008 Aug;35(4):379-99. 
 doi: 10.1007/s10928-008-9093-5. Epub 2008 Jul 17. PubMed PMID: 18633695.
   
-[ set ] req = "NTX", end = 14*24, rtol=1e-5
+[ set ] req = "NTX", end = 14*24, rtol=1e-6, atol = 1e-6
   
 [GLOBAL]
 #define CP (CENT/(VC/1000000.0))

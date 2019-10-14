@@ -28,25 +28,25 @@ sc <- expand.ev(ID=1:8, amt=1, cmt=1)
 sc
 
 #merge in patient weights and parameter values
-sc <- sc %>% left_join(cohort)
+sc <- sc %>% left_join(cohort,by="ID")
 sc
 
 #calculate AMT in mg/kg using patient weights
 sc <- sc %>% mutate(amt=1*WT)
+
 #remove WT, so that it doesn't impact fixed effects in model
 sc <- sc %>% dplyr::select(-WT)
 sc
 
-#We will get the observation design for the simulation through a `tgrid` object
-des <- tgrid(end=-1,add=seq(0,168,1))
-des
-
 #Simulate profiles for each patient
-out <- mod %>% Req(PKDV,AUC) %>% mrgsim(data=sc,tgrid=des,obsonly=TRUE) %>% as.data.frame()
+out <- mod %>% Req(PKDV,AUC) %>% mrgsim_df(data=sc,end=168,obsonly=TRUE)
+
 head(out)
 
 #plot profiles for each patient
-ggplot(data=out) + geom_line(aes(x=time,y=PKDV,group=ID,color=factor(ID)),size=1) + ylab("Concentration (ng/mL)") + xlab("Time (hours)")
+ggplot(data=out) + 
+  geom_line(aes(x=time,y=PKDV,group=ID,color=factor(ID)),size=1) + 
+  ylab("Concentration (ng/mL)") + xlab("Time (hours)")
 
 #gather AUC and CMAX
 summ <- out %>% group_by(ID) %>% summarize(CMAX=max(PKDV),AUC=max(AUC))
