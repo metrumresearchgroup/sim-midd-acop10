@@ -2,7 +2,7 @@
 library(mrgsolve)
 library(tidyverse)
 
-# Exercise 2:  Stochastic Simulation
+# Exercise 2:  Simulation with Variability
 
 # Question
 # What dose is required to maintain steady-state trough concentrations above 
