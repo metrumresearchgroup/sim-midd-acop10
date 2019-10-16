@@ -7,7 +7,7 @@ options(future.fork.enable=TRUE)
 plan(multiprocess,workers=4L)
 opt <- future_options(seed = TRUE)
 
-# Exercise 3:  Uncertainty Simulation
+# Exercise 3:  Simulation with Uncertainty
 
 # Question
 # What dose would provide a 90% probability of achieving a 40% reduction in NTX 
