@@ -1,4 +1,4 @@
-# Packages
+#' Packages
 library(mrgsolve)
 library(tidyverse)
 library(furrr)
@@ -7,37 +7,37 @@ options(future.fork.enable=TRUE)
 plan(multiprocess,workers=4L)
 opt <- future_options(seed = TRUE)
 
-# Exercise 3:  Simulation with Uncertainty
+#' Exercise 3:  Simulation with Uncertainty
 
-# Question
-# What dose would provide a 90% probability of achieving a 40% reduction in NTX 
-# with Q2W dosing?  With Q3W dosing?
+#' Question
+#' What dose would provide a 90% probability of achieving a 40% reduction in NTX 
+#' with Q2W dosing?  With Q3W dosing?
 
-#OPG PK/PD model
+#' OPG PK/PD model
 mod <- mread("models/opg_pkpd.mod")
 mod
 
-#Checkout the random effects structure
+#' Checkout the random effects structure
 revar(mod)
 
-#set OMEGA and SIGMA matrices to zero to remove IIV and RUV
+#' set OMEGA and SIGMA matrices to zero to remove IIV and RUV
 mod <- zero_re(mod)
 revar(mod)
 
-# Load the simulated posterior
+#' Load the simulated posterior
 post <- read.table("data/post_POC.csv",header=T,sep=",") %>% sample_n(1000)
 
-#load database of patient weights and calculate mean to use in dose amount calculation
+#' load database of patient weights and calculate mean to use in dose amount calculation
 wt <- read.table("data/demographics.csv",header=T,sep=",") %>% summarize(WT=mean(WT))
 
-#Q2W doses
-# Input / template data set
+#' Q2W doses
+#' Input / template data set
 sc <- expand.ev(ID=1, amt=0, cmt=1, dose=1:10, ii=336, addl=5)
 
-# tgrid object
+#' tgrid object
 des <- tgrid(0,2016,12)
 
-#Simulation function
+#' Simulation function
 sim <- function(i,data,des) {
   #sample WTs and set dosing amount
   data[,"amt"] <- wt$WT*data[,"dose"]
@@ -63,7 +63,7 @@ summ <-
     Q90=quantile(PCFB,prob=c(0.90))
   )
 
-#Plot the distribution of percent change from baseline
+#' Plot the distribution of percent change from baseline
 ggplot(data=summ) + 
   geom_ribbon(aes(x=time,ymin=Q10,ymax=Q90),fill='cyan',alpha=0.5) + 
   geom_line(aes(x=time,y=Q50)) + 
@@ -86,12 +86,12 @@ ggplot(data=below) +
 
 
 
-#Q3W doses
+#' Q3W doses
 
-# Input / template data set
+#' Input / template data set
 sc <- expand.ev(ID=1, amt=0, cmt=1, dose=seq(10,100,10), ii=168*3, addl=3)
 
-# tgrid object
+#' tgrid object
 des <- tgrid(0,2016,12)
 
 out <- future_map_dfr(1:1000, sim, data=sc, des=des, .options=opt)
@@ -106,7 +106,7 @@ summ <-
     Q90=quantile(PCFB,prob=c(0.90))
   )
 
-#Plot the distribution of percent change from baseline
+#' Plot the distribution of percent change from baseline
 ggplot(data=summ) + 
   geom_ribbon(aes(x=time,ymin=Q10,ymax=Q90),fill='cyan',alpha=0.5) + 
   geom_line(aes(x=time,y=Q50)) + 
