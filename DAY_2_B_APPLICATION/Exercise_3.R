@@ -7,7 +7,7 @@ options(future.fork.enable=TRUE)
 plan(multiprocess,workers=4L)
 opt <- future_options(seed = TRUE)
 
-# Exercise 3:  Uncertainty Simulation
+# Exercise 3:  Simulation with Uncertainty
 
 # Question
 # What is the probability that a 5 mg/kg dose would achieve the target of 
