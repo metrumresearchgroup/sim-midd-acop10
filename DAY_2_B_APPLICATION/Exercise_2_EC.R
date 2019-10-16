@@ -2,7 +2,7 @@
 library(mrgsolve)
 library(tidyverse)
 
-# Exercise 2:  Stochastic Simulation
+# Exercise 2:  Simulation with Variability
 
 # Question
 # What is the maximum weekly dose that can be administered while 
