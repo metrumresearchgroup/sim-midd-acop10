@@ -93,6 +93,7 @@ ggplot(data=summ) +
   facet_wrap(~dose)
 
 below <- out %>% filter(time==336) %>% group_by(dose) %>% summarize(FRAC=mean(PCFB < -40))
+
 below
 
 ggplot(data=below) + 
@@ -101,15 +102,14 @@ ggplot(data=below) +
   xlab("Dose (mg)") + ylab("Probability dNTX < -40%") + 
   ggtitle("Patients < 70 kg")
 
-
-
 #' WT >= 70
 
 #' load database of patient weights and sample 1000 values to use in dose amount 
 #' calculation
 demo <- read.table("data/demographics.csv",header=T,sep=",") %>% filter(WT >= 70) %>% sample_n(1000)
 
-out <- mclapply(1:1000, sim, data=sc, des=des) %>% bind_rows
+set.seed(5678)
+out <- future_map_dfr(1:1000, sim, data=sc, des=des, .options=opt)
 head(out)
 
 #' summarize and plot
