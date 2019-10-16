@@ -1,4 +1,4 @@
-# Packages
+#' Packages
 library(mrgsolve)
 library(tidyverse)
 library(furrr)
@@ -7,25 +7,25 @@ options(future.fork.enable=TRUE)
 plan(multiprocess,workers=4L)
 opt <- future_options(seed = TRUE)
 
-# Exercise 5:  Population Simulation
+#' Exercise 5:  Population Simulation
 
-# Question
-# What is the probability that at least a 53% mean reduction in NTX  would be 
-# observed at steady-state in the OPG-treated study arm?
-# 600 patients receiving 400 mg Q2W
+#' Question
+#' What is the probability that at least a 53% mean reduction in NTX  would be 
+#' observed at steady-state in the OPG-treated study arm?
+#' 600 patients receiving 400 mg Q2W
 
 mod <- mread("models/opg_pkpd.mod")
 mod
 
-#Checkout the random effects structure
+#' Checkout the random effects structure
 revar(mod)
 
-# collapse omega and sigma matrices
+#' collapse omega and sigma matrices
 mod <- mod %>% mrgsolve:::collapse_omega() 
 mod <- mod %>% mrgsolve:::collapse_sigma() 
 revar(mod)
 
-# Load the simulated posterior
+#' Load the simulated posterior
 post <- read.table("data/post.csv",header=T,sep=",") %>% sample_n(1000)
 
 omegas <- as_bmat(post,"OMEGA")
@@ -34,26 +34,26 @@ omegas[[1]]
 sigmas <- as_bmat(post,"SIGMA")
 sigmas[[1]]
 
-#load database of patient weights and sample 600 values
+#' load database of patient weights and sample 600 values
 demo <- read.table("data/demographics.csv",header=T,sep=",") %>% sample_n(600)
 
-# Input / template data set
-#Here is a simple dosing data set to simulate 1 patient
+#' Input / template data set
+#' Here is a simple dosing data set to simulate 1 patient
 sc <- expand.ev(ID=1, amt=400, cmt=1, ii=336, ss=1, WT=demo$WT)
 sc
 
-#We will get the observation design for the simulation through a `tgrid` object
+#' We will get the observation design for the simulation through a `tgrid` object
 des <- tgrid(end=-1,add=c(0,336))
 des
 
-# Replicate simulation with uncertainty
-#When we do replicate simulation, it almost always pays off
-#to construct a function that will carry out one replicate.
+#' Replicate simulation with uncertainty
+#' When we do replicate simulation, it almost always pays off
+#' to construct a function that will carry out one replicate.
 
-#Arguments to the function are
-#- `i` the current simulation replicate
-#- `data` the dosing data set
-#- `des` the observation design
+#' Arguments to the function are
+#' - `i` the current simulation replicate
+#' - `data` the dosing data set
+#' - `des` the observation design
 
 sim.mean <- function(i,data,des) {
   #set parameter values
@@ -74,7 +74,7 @@ sim.mean <- function(i,data,des) {
   return(out)
 }
 
-#simulate by calling the function 1000 times
+#' simulate by calling the function 1000 times
 set.seed(9999)
 
 out <- future_map_dfr(1:1000, sim.mean, data=sc, des=des,.options=opt)
@@ -86,19 +86,19 @@ ggplot(data=out) +
   geom_vline(xintercept=-53,linetype='dashed') +
   xlab("Mean Change in NTX at Trough (%)")
 
-#calculate fraction of studies below threshold
+#' calculate fraction of studies below threshold
 out %>% summarize(FRAC=mean(MEAN < -53))
 
-######## Sensitivity Analysis ############
+#' # Sensitivity Analysis
 
-# pull THETA values out of posteriors and merge with mean change in NTX by 
-# replicate number
+#' pull THETA values out of posteriors and merge with mean change in NTX by 
+#' replicate number
 data <- post %>% 
   dplyr::select(contains("THETA")) %>%
   mutate(irep=row_number()) %>% 
   left_join(out)
 
-# plot posteriors vs mean change in NTX
+#' plot posteriors vs mean change in NTX
 ggplot(data=data,aes(x=THETA1,y=MEAN)) + geom_point() + geom_smooth() + xlab("Clearance") + ylab("Mean Change in NTX (%)")
 ggplot(data=data,aes(x=THETA2,y=MEAN)) + geom_point() + geom_smooth() + xlab("Central Volume") + ylab("Mean Change in NTX (%)")
 ggplot(data=data,aes(x=THETA3,y=MEAN)) + geom_point() + geom_smooth() + xlab("Peripheral Volume 1") + ylab("Mean Change in NTX (%)")
