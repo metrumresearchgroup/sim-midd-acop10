@@ -20,28 +20,39 @@ library(mrgsolve)
   - IV administration, short or long infusion
   - 2-compartment PK
 
-First, load `meropenem_basic`, which is a PK model for meropenem, written 
+First, load `meropen_basic`, which is a PK model for meropenem, written 
 in terms of basic PK parameters (e.g. `CL`, `V`, etc)
 
 ```{r}
-mod <- mread("meropen_basic")
+
 ```
 
+Check the model parameters
+```{r}
+
+```
+
+Check the model compartments
 
 ```{r}
-param(mod)
+
+```
+
+View the model code
+
+```{r}
+
 ```
 
 
 # Explore dosing regimens with event object
 
-We can use a simple event object to implement a single dose
+We can use a simple event object to implement a single dose pf 
+500 mg infused over 30 minutes
 
 
 ```{r}
-short <- ev(amt = 500, tinf = 0.5)
 
-short
 ```
 
 The event object has data items like
@@ -53,36 +64,37 @@ The event object has data items like
 There are other items as well. 
 
 
-We can simulate from this event object with the `meropen_basic` model
+We can simulate from this event object with the `meropen_basic` model, 
+running the simulation out to 8 hours
 ```{r}
-out <- mod %>% ev(short) %>% mrgsim(end = 8)
 
-out
 ```
 
-And work with the result
+Plot the result
 ```{r}
-plot(out)
+
 ```
 
 
 ## Multiple dosing
-```{r}
-short3 <- ev(amt = 500, ii = 8, addl = 2)
 
-mod %>% ev(short3) %>% mrgsim(end = 24, Req = "CP") %>% plot()
+Now, create an event object for 500 mg every 8 hours x 3 and simulate
+a day of doses
+
+```{r}
+
 ```
 
-## How to implement multiple doses
+
+## Implement a batch of simulations
 
 In addition to event objects, we can simulate a batch or population of 
-individuals with a data set.  For example
+individuals with a data set.  For example, to simulate the 500 mg 
+at durations of 30 min, 1 hour and 3 hours, create a data set
 
 
 ```{r}
-data <- expand.ev(amt = 500, tinf = c(0.5, 1, 3))
 
-data
 ```
 
 In this example, we have 3 IDs, each receiving 500 mg x1 and infusion durations
@@ -90,8 +102,9 @@ ranging from 0.5 to 3 hours.
 
 
 Now to simulate the `meropen_basic` model with the data set
+
 ```{r}
-mod %>% data_set(data) %>% mrgsim() %>% plot(CP~time)
+
 ```
 
 A lot of the complexity and efficiency in your simulation comes from the 
@@ -104,53 +117,91 @@ We can read in `meropen_pop`, which is a population version of the same
 model
 
 ```{r}
-mod <- mread_cache("meropen_pop")
 
 ```
 
 Now, we have some population elements going
 
 ```{r}
-param(mod)
+
 ```
 
+check the random effects structure
 
 ```{r}
-revar(mod)
+
 ```
 
-Now, when we take a population template
+Now, when we make a population template, consisting of 50 subjects
+dosed at 500 mg x1 over 2 hours
 
 ```{r}
-data <- ev_rep(ev(amt = 500, tinf = 2), 1:50)
-
-head(data)
 
 ```
 
 we'll get population output
 
 ```{r}
-mod %>% mrgsim_d(data) %>% plot(CP~time, logy=TRUE)
+
 ```
 
+# Three simulation workflows
+
+
+## model + event
+
+- Model: `meropen_basic.cpp`
+- Event: 250 mg q8h x 5 d
+
+```{r}
+
+```
+
+## model + data set
+
+- Model: `meropen_pop.cpp`
+- Covariates: CLCR 40, 100
+- Data set: 
+  - 500 mg q8 x 3 for 24 h if CLCR 100
+  - 250 mg q8h x3 for 24 if CLCR 40
+
+
+```{r}
+
+```
+
+## model + event + idata_set
+
+```{r}
+
+```
 
 
 # Posterior simulation
 
-```{r}
-post <- read_csv("post.csv")
+Read in `post.csv`
 
-head(post)
+```{r}
+
 ```
+
+We can inventory the model
 
 ```{r, message=TRUE}
 inventory(mod,post)
 ```
 
 
+Form lists of OMEGA matrices
 ```{r}
-omega <- as_bmat(post, "OMEGA")
+
+```
+
+
+Form lists of SIGMA matrices
+
+```{r}
+
 ```
 
 
