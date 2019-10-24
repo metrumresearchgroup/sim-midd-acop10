@@ -132,8 +132,8 @@ check the random effects structure
 
 ```
 
-Now, when we make a population template, consisting of 50 subjects
-dosed at 500 mg x1 over 2 hours
+Now, when we make a population template, consisting of 50 subjects dosed at 
+500 mg x1 over 2 hours
 
 ```{r}
 
@@ -162,15 +162,22 @@ we'll get population output
 - Model: `meropen_pop.cpp`
 - Covariates: CLCR 40, 100
 - Data set: 
-  - 500 mg q8 x 3 for 24 h if CLCR 100
-  - 250 mg q8h x3 for 24 if CLCR 40
+  - 500 mg q8h over 1 hr x 3 for 24 h if CLCR 100
+  - 250 mg q8h over 1 hr x 3 for 24 h if CLCR 40
 
 
 ```{r}
 
 ```
 
+### Some helper functions to create data sets
+
+
 ## model + event + idata_set
+
+- Model: `meropen_pop.cpp`
+- Covariates: WT
+- Data set: 500 mg over 3 hours x1
 
 ```{r}
 
@@ -204,41 +211,29 @@ Form lists of SIGMA matrices
 
 ```
 
+## Create a function to simulate one replicate
+
+```{r}
+
+```
+
+
+## Create a loop to simulate 50 replicates
+
+```{r}
+
+```
+
 
 # Parallelizing your code
 
 Use the future.apply package
-```{r}
-mod <- mread_cache("meropen_pop")
 
-library(future.apply)
-
-options(future.fork.enable=TRUE)
-
-plan(multiprocess, workers = 4)
-
-sim <- function(i,d) {
-  mod <- param(mod,slice(d$post,i))
-  mod <- omat(mod,d$omega[[i]])
-  mrgsim_df(mod,d$data, carry_out = "tinf") %>% 
-    mutate(irep = i)
-}
-
-set.seed(123)
-
-reps <- seq(40)
-
-data <- expand.ev(amt = 500, tinf = c(0.5,1,3)) %>% mutate(tinf = amt/rate)
-
-dat <- list(data = data, mod = mod, post = post, omega = omega)
-
-out <- future_lapply(reps, sim, dat) %>% bind_rows()
-```
-
+- Enable fork
+- plan: multiprocess, workers 4
 
 ```{r}
-ggplot(out, aes(time,CP,group=irep)) + facet_wrap(~tinf) + geom_line() + 
-  scale_y_log10(limits = c(0.1, NA))
+
 ```
 
 
